@@ -56,7 +56,7 @@ var moves map[int]Move
 
 type Card struct {
 	cardSymbol CSymbol
-	cardType   CType
+	cardType   CSuit
 }
 
 type CSymbol int64
@@ -70,7 +70,7 @@ const (
 	NULL     = 99
 )
 
-type CType int64
+type CSuit int64
 
 const (
 	ACE   = iota
@@ -109,6 +109,7 @@ func main() {
 	inputFmt := color.New(color.FgCyan)
 	infoFmt := color.New(color.FgMagenta)
 	fmt.Println("Running CowChina v0.1.0 ")
+	// Get player names
 	var p1Name, p2Name, p3Name, p4Name string
 	inputFmt.Print("Enter name of the first player: ")
 	fmt.Scanln(&p1Name)
@@ -124,19 +125,23 @@ func main() {
 	player4 = Player{4, p4Name, make(map[int]CSymbol), TEAM_B}
 	infoFmt.Println(player1.name, "and", player3.name, "is Team A.")
 	infoFmt.Println(player2.name, "and", player4.name, "is Team B.")
+	// Get the bid
 	currentBid := Bid{}
 	for currentBid.wins == 0 {
 		var highestBid, biddingTeam, biddingSymbol string
+		var bidTeam Team
+		// Get input
 		inputFmt.Print("Enter highest bid: ")
 		fmt.Scanln(&highestBid)
 		inputFmt.Print("Enter highest bidding team: ")
 		fmt.Scanln(&biddingTeam)
 		inputFmt.Print("Enter bidding suit chosen: ")
 		fmt.Scanln(&biddingSymbol)
-		bidInt, err := strconv.Atoi(highestBid)
 
-		var bidTeam Team
+		// Convert the bid input to string
+		bidInt, err := strconv.Atoi(highestBid)
 		if err == nil {
+			// Get the input of the team
 			switch biddingTeam {
 			case "a":
 				bidTeam = TEAM_A
@@ -146,20 +151,22 @@ func main() {
 				bidTeam = NULL
 			}
 			if bidTeam != NULL {
+				// Get the symbol
 				symbol, err := getSymbolFromText(biddingSymbol)
 				if err == nil {
+					// No errors, lets set the currentBid!
 					currentBid = Bid{bidInt, symbol, bidTeam}
 				}
-
 			}
 		}
 		if currentBid.wins == 0 {
+			// Uh, oh! There was an error in the previous input and the Bid was not set
 			errorFmt.Print("Invalid bid!")
 			fmt.Println()
 		}
 	}
 	fmt.Println(currentBid)
-
+	// We will initialize the moves map and declare these variables to be used
 	moves = make(map[int]Move)
 	playerTurn := 1
 	moveCount := 1
@@ -191,7 +198,7 @@ func main() {
 		pass := false
 		fmt.Scanln(&moveIn)
 		var cardSymbol CSymbol = NULL
-		var cardType CType = NULL
+		var cardType CSuit = NULL
 		if moveIn == "" {
 			if len(moves) == 0 {
 				pass = true
@@ -217,7 +224,7 @@ func main() {
 
 			if len(moveIn) == 2 {
 				cardTypeIn := fmt.Sprintf("%c", moveIn[1])
-				cardTypeGet, err := getSuitFromText(cardTypeIn, "")
+				cardTypeGet, err := getSuitFromText(cardTypeIn)
 				if err != nil {
 					errorFmt.Print(err)
 					fmt.Println()
@@ -225,9 +232,9 @@ func main() {
 					cardType = cardTypeGet
 				}
 			} else if len(moveIn) == 3 {
-				cardTypeIn := fmt.Sprintf("%c", moveIn[1])
-				cardTypeIn2 := fmt.Sprintf("%c", moveIn[2])
-				cardTypeGet, err := getSuitFromText(cardTypeIn, cardTypeIn2)
+				cardTypeIn := fmt.Sprintf("%c", moveIn[1]) + fmt.Sprintf("%c", moveIn[2])
+
+				cardTypeGet, err := getSuitFromText(cardTypeIn)
 				if err != nil {
 					errorFmt.Print(err)
 					fmt.Println()
@@ -243,8 +250,7 @@ func main() {
 			cardSymbol = JOKER
 			cardType = BLACK
 		} else {
-			// Invalid
-			return
+
 		}
 		if cardSymbol != NULL && cardType != NULL && !pass {
 			if playerTurn < 4 {
@@ -266,7 +272,7 @@ func main() {
 					currentPlayer.cSBList = blacklist
 				}
 			}
-
+			infoFmt.Println(cardToText(cardPlaced))
 			// Continue for the next mov
 			if deckCount < 4 {
 				deckCount++
@@ -287,8 +293,49 @@ func main() {
 			fmt.Println()
 		}
 	}
-
 	fmt.Println("End of game! (or max cycles reached)")
+}
+
+func cardToText(card Card) string {
+	var symbol, suit string
+	if card.cardSymbol == JOKER {
+		switch card.cardType {
+		case BLACK:
+			return "Small (black) Joker"
+		case RED:
+			return "Big (red) Joker"
+		}
+	}
+	switch card.cardSymbol {
+	case CLUBS:
+		symbol = "Clubs"
+	case DIAMONDS:
+		symbol = "Diamonds"
+	case HEARTS:
+		symbol = "Hearts"
+	case SPADES:
+		symbol = "Spades"
+	}
+
+	switch card.cardType {
+	case ACE:
+		suit = "Ace"
+	case JACK:
+		suit = "Jack"
+	case QUEEN:
+		suit = "Queen"
+	case KING:
+		suit = "King"
+	case N6:
+		suit = "6"
+	case N7:
+		suit = "7"
+	case N8:
+		suit = "8"
+	case N9:
+		suit = "9"
+	}
+	return suit + " of " + symbol
 
 }
 
@@ -307,27 +354,10 @@ func getSymbolFromText(symbol string) (CSymbol, error) {
 	}
 }
 
-func getSuitFromText(suitA, suitB string) (CType, error) {
-	fmt.Println(suitA, suitB)
-	if suitB != "" {
-		switch suitA {
-		case "a":
-			return ACE, nil
-		case "j":
-			return JACK, nil
-		case "q":
-			return QUEEN, nil
-		case "k":
-			return KING, nil
-		default:
-			return NULL, errors.New("Unknown Suit")
-		}
-	} else {
-		suitBint, err := strconv.Atoi(suitB)
-		if err != nil {
-			return NULL, errors.New("Unknown Suit")
-		}
-		switch suitBint {
+func getSuitFromText(suit string) (CSuit, error) {
+	suitint, err := strconv.Atoi(suit)
+	if err == nil {
+		switch suitint {
 		case 6:
 			return N6, nil
 		case 7:
@@ -338,6 +368,19 @@ func getSuitFromText(suitA, suitB string) (CType, error) {
 			return N9, nil
 		case 10:
 			return N10, nil
+		default:
+			return NULL, errors.New("Unknown Suit")
+		}
+	} else {
+		switch suit {
+		case "a":
+			return ACE, nil
+		case "j":
+			return JACK, nil
+		case "q":
+			return QUEEN, nil
+		case "k":
+			return KING, nil
 		default:
 			return NULL, errors.New("Unknown Suit")
 		}
