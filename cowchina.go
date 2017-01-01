@@ -29,7 +29,7 @@ Possible inputs:
 ca: Club (black) A
 da: Diamond (red) A
 ha: Heart (red) A
-sa: Spades (black) a
+sa: Spades (black) A
 
 c{6-9}: Club (black) {2-10}
 d{6-9}: Diamond (red) {2-10}
@@ -46,6 +46,7 @@ x: Red JOKER
 
 {empty} = PASS
 {tab} = Go back
+:<player id> = Jump to player
 
 Cheat Detection:
 1. If the symbol is changed, blacklist the type before it.
@@ -63,13 +64,15 @@ import (
 	"github.com/fatih/color"
 )
 
+// Player is a struct that contains all the information of a player.
 type Player struct {
 	id      int
 	name    string
-	cSBList map[int]CSymbol
+	cSBList map[int]CSuit
 	team    Team
 }
 
+// Move is a struct that contains a Card and the player (which placed it).
 type Move struct {
 	card   Card
 	player int
@@ -77,43 +80,66 @@ type Move struct {
 
 var moves map[int]Move
 
+// Card is a struct that contains all the attributes of a playing card.
 type Card struct {
+	cardSuit   CSuit
 	cardSymbol CSymbol
-	cardType   CSuit
 }
 
-type CSymbol int64
-
-const (
-	CLUBS    = iota
-	DIAMONDS = iota
-	HEARTS   = iota
-	SPADES   = iota
-	JOKER    = iota
-	NULL     = 99
-)
-
+// CSuit is a type that holds the symbol constant.
 type CSuit int64
 
 const (
-	ACE   = iota
-	JACK  = iota
-	QUEEN = iota
-	KING  = iota
-	RED   = iota
-	BLACK = iota
-	N6    = iota
-	N7    = iota
-	N8    = iota
-	N9    = iota
-	N10   = iota
+	// CLUBS is the clubs symbol on a card.
+	CLUBS = iota
+	// DIAMONDS is the diamonds symbol on a card.
+	DIAMONDS = iota
+	// HEARTS is the hearts symbol on a card.
+	HEARTS = iota
+	// SPADES is the spades symbol on a card.
+	SPADES = iota
+	// JOKER is the joker card.
+	JOKER = iota
+	// NULL is a constant used to specify a null in an int64 type.
+	NULL = 99
 )
 
+// CSymbol is a type that holds the suit const.
+type CSymbol int64
+
+const (
+	// ACE is the "A" ace suit on a card.
+	ACE = iota
+	// JACK is the "J" jack suit on a card.
+	JACK = iota
+	// QUEEN is the "Q" queen suit on a card.
+	QUEEN = iota
+	// KING is the "K" king suit on a card.
+	KING = iota
+	// RED is a colour attribute of the joker card.
+	RED = iota
+	// BLACK is a colour attribute of the joker card.
+	BLACK = iota
+	// N6 is the number 6 on a card.
+	N6 = iota
+	// N7 is the number 7 on a card.
+	N7 = iota
+	// N8 is the number 8 on a card.
+	N8 = iota
+	// N9 is the number 9 on a card.
+	N9 = iota
+	// N10 is the number 10 on a card.
+	N10 = iota
+)
+
+// Team is a type that can hold the team const.
 type Team int64
 
 const (
-	TEAM_A = iota
-	TEAM_B = iota
+	// TeamA is a team of two players in a game.
+	TeamA = iota
+	// TeamB is a team of two players in a game.
+	TeamB = iota
 )
 
 var player1 Player
@@ -121,10 +147,11 @@ var player2 Player
 var player3 Player
 var player4 Player
 
+// Bid is a struct which can save the bid information of a game.
 type Bid struct {
-	wins       int
-	cardSymbol CSymbol
-	team       Team
+	wins     int
+	cardSuit CSuit
+	team     Team
 }
 
 func main() {
@@ -142,24 +169,24 @@ func main() {
 	fmt.Scanln(&p3Name)
 	inputFmt.Print("Enter name of the fourth player: ")
 	fmt.Scanln(&p4Name)
-	player1 = Player{1, p1Name, make(map[int]CSymbol), TEAM_A}
-	player2 = Player{2, p2Name, make(map[int]CSymbol), TEAM_B}
-	player3 = Player{3, p3Name, make(map[int]CSymbol), TEAM_A}
-	player4 = Player{4, p4Name, make(map[int]CSymbol), TEAM_B}
+	player1 = Player{1, p1Name, make(map[int]CSuit), TeamA}
+	player2 = Player{2, p2Name, make(map[int]CSuit), TeamB}
+	player3 = Player{3, p3Name, make(map[int]CSuit), TeamA}
+	player4 = Player{4, p4Name, make(map[int]CSuit), TeamB}
 	infoFmt.Println(player1.name, "and", player3.name, "is Team A.")
 	infoFmt.Println(player2.name, "and", player4.name, "is Team B.")
 	// Get the bid
 	currentBid := Bid{}
 	for currentBid.wins == 0 {
-		var highestBid, biddingTeam, biddingSymbol string
+		var highestBid, biddingTeam, biddingSuit string
 		var bidTeam Team
 		// Get input
 		inputFmt.Print("Enter highest bid: ")
 		fmt.Scanln(&highestBid)
+		inputFmt.Print("Enter bidding suit chosen: ")
+		fmt.Scanln(&biddingSuit)
 		inputFmt.Print("Enter highest bidding team: ")
 		fmt.Scanln(&biddingTeam)
-		inputFmt.Print("Enter bidding suit chosen: ")
-		fmt.Scanln(&biddingSymbol)
 
 		// Convert the bid input to string
 		bidInt, err := strconv.Atoi(highestBid)
@@ -167,18 +194,18 @@ func main() {
 			// Get the input of the team
 			switch biddingTeam {
 			case "a":
-				bidTeam = TEAM_A
+				bidTeam = TeamA
 			case "b":
-				bidTeam = TEAM_B
+				bidTeam = TeamB
 			default:
 				bidTeam = NULL
 			}
 			if bidTeam != NULL {
 				// Get the symbol
-				symbol, err := getSymbolFromText(biddingSymbol)
+				suit, err := getSuitFromText(biddingSuit)
 				if err == nil {
 					// No errors, lets set the currentBid!
-					currentBid = Bid{bidInt, symbol, bidTeam}
+					currentBid = Bid{bidInt, suit, bidTeam}
 				}
 			}
 		}
@@ -194,9 +221,7 @@ func main() {
 	playerTurn := 1
 	moveCount := 1
 	deckCount := 1
-	var deckFirstSymbol Card
 	for i := 1; i < 99; i++ {
-
 		var currentPlayer *Player
 		switch playerTurn {
 		case 1:
@@ -220,8 +245,9 @@ func main() {
 
 		pass := false
 		fmt.Scanln(&moveIn)
-		var cardSymbol CSymbol = NULL
-		var cardType CSuit = NULL
+		var cardSuit CSuit
+		var cardSymbol CSymbol
+		var failed bool
 		if moveIn == "" {
 			if len(moves) == 0 {
 				pass = true
@@ -234,9 +260,23 @@ func main() {
 				errorFmt.Print("Cannot pass mid-game!")
 				fmt.Println()
 			}
-
+		} else if len(moveIn) < 2 {
+			errorFmt.Print("Invalid input, enter again!")
+			fmt.Println()
 		} else if strings.HasPrefix(moveIn, "c") || strings.HasPrefix(moveIn, "d") || strings.HasPrefix(moveIn, "h") || strings.HasPrefix(moveIn, "s") {
-			cardSymbolIn := fmt.Sprintf("%c", moveIn[0])
+			cardSuitIn := fmt.Sprintf("%c", moveIn[0])
+			cardSuitGet, err := getSuitFromText(cardSuitIn)
+			if err != nil {
+				errorFmt.Print(err)
+				fmt.Println()
+			} else {
+				cardSuit = cardSuitGet
+			}
+
+			cardSymbolIn := fmt.Sprintf("%c", moveIn[1])
+			if len(moveIn) == 3 {
+				cardSymbolIn += fmt.Sprintf("%c", moveIn[2])
+			}
 			cardSymbolGet, err := getSymbolFromText(cardSymbolIn)
 			if err != nil {
 				errorFmt.Print(err)
@@ -244,54 +284,33 @@ func main() {
 			} else {
 				cardSymbol = cardSymbolGet
 			}
-
-			if len(moveIn) == 2 {
-				cardTypeIn := fmt.Sprintf("%c", moveIn[1])
-				cardTypeGet, err := getSuitFromText(cardTypeIn)
-				if err != nil {
-					errorFmt.Print(err)
-					fmt.Println()
-				} else {
-					cardType = cardTypeGet
-				}
-			} else if len(moveIn) == 3 {
-				cardTypeIn := fmt.Sprintf("%c", moveIn[1]) + fmt.Sprintf("%c", moveIn[2])
-
-				cardTypeGet, err := getSuitFromText(cardTypeIn)
-				if err != nil {
-					errorFmt.Print(err)
-					fmt.Println()
-				} else {
-					cardType = cardTypeGet
-				}
-			}
-
 		} else if moveIn == "z" {
-			cardSymbol = JOKER
-			cardType = RED
+			cardSuit = JOKER
+			cardSymbol = RED
 		} else if moveIn == "x" {
-			cardSymbol = JOKER
-			cardType = BLACK
-		} else {
-
+			cardSuit = JOKER
+			cardSymbol = BLACK
 		}
-		if cardSymbol != NULL && cardType != NULL && !pass {
+
+		if pass {
+			infoFmt.Println(currentPlayer.name + " Pass!")
+		} else if !failed {
 			if playerTurn < 4 {
 				playerTurn++
 			} else {
 				playerTurn = 1
 			}
-			cardPlaced := Card{cardSymbol, cardType}
+			cardPlaced := Card{cardSuit, cardSymbol}
 			thisMove := Move{cardPlaced, currentPlayer.id}
 
 			// Check with previous moves if this move changes symbol
 			if !newFace {
-				if deckFirstSymbol.cardSymbol == cardPlaced.cardSymbol {
+				if currentBid.cardSuit == cardPlaced.cardSuit {
 					// This is compatible
 				} else {
-					// The player placed a card not the same symbol as the first. We will add it to blacklist.
+					// The player placed a card not the same symbol as the bid. We will add it to blacklist.
 					blacklist := currentPlayer.cSBList
-					blacklist[len(blacklist)] = cardSymbol
+					blacklist[len(blacklist)] = cardSuit
 					currentPlayer.cSBList = blacklist
 				}
 			}
@@ -302,15 +321,12 @@ func main() {
 				newFace = false
 			} else {
 				deckCount = 1
-				deckFirstSymbol = Card{}
 				newFace = true
 				infoFmt.Print("===== New deck! =====")
 				fmt.Println()
 			}
 			moves[moveCount] = thisMove
 			moveCount++
-		} else if pass {
-			infoFmt.Println(currentPlayer.name + " Pass!")
 		} else {
 			errorFmt.Print("Invalid input, enter again!")
 			fmt.Println()
@@ -321,15 +337,15 @@ func main() {
 
 func cardToText(card Card) string {
 	var symbol, suit string
-	if card.cardSymbol == JOKER {
-		switch card.cardType {
+	if card.cardSuit == JOKER {
+		switch card.cardSuit {
 		case BLACK:
 			return "Small (black) Joker"
 		case RED:
 			return "Big (red) Joker"
 		}
 	}
-	switch card.cardSymbol {
+	switch card.cardSuit {
 	case CLUBS:
 		symbol = "Clubs"
 	case DIAMONDS:
@@ -340,7 +356,7 @@ func cardToText(card Card) string {
 		symbol = "Spades"
 	}
 
-	switch card.cardType {
+	switch card.cardSymbol {
 	case ACE:
 		suit = "Ace"
 	case JACK:
@@ -357,12 +373,13 @@ func cardToText(card Card) string {
 		suit = "8"
 	case N9:
 		suit = "9"
+	case N10:
+		suit = "10"
 	}
 	return suit + " of " + symbol
-
 }
 
-func getSymbolFromText(symbol string) (CSymbol, error) {
+func getSuitFromText(symbol string) (CSuit, error) {
 	switch symbol {
 	case "c":
 		return CLUBS, nil
@@ -373,11 +390,11 @@ func getSymbolFromText(symbol string) (CSymbol, error) {
 	case "s":
 		return SPADES, nil
 	default:
-		return NULL, errors.New("Unknown Symbol")
+		return NULL, errors.New("Unknown Suit")
 	}
 }
 
-func getSuitFromText(suit string) (CSuit, error) {
+func getSymbolFromText(suit string) (CSymbol, error) {
 	suitint, err := strconv.Atoi(suit)
 	if err == nil {
 		switch suitint {
@@ -392,7 +409,7 @@ func getSuitFromText(suit string) (CSuit, error) {
 		case 10:
 			return N10, nil
 		default:
-			return NULL, errors.New("Unknown Suit")
+			return NULL, errors.New("Unknown Symbol")
 		}
 	} else {
 		switch suit {
@@ -405,8 +422,7 @@ func getSuitFromText(suit string) (CSuit, error) {
 		case "k":
 			return KING, nil
 		default:
-			return NULL, errors.New("Unknown Suit")
+			return NULL, errors.New("Unknown Symbol")
 		}
 	}
-
 }
