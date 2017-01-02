@@ -142,10 +142,7 @@ const (
 	TeamB = iota
 )
 
-var player1 Player
-var player2 Player
-var player3 Player
-var player4 Player
+var players map[int]Player
 
 // Bid is a struct which can save the bid information of a game.
 type Bid struct {
@@ -156,28 +153,24 @@ type Bid struct {
 
 func main() {
 	errorFmt := color.New(color.BgRed).Add(color.Underline)
+	anticheatFmt := color.New(color.BgHiMagenta)
 	inputFmt := color.New(color.FgCyan)
 	infoFmt := color.New(color.FgMagenta)
+	debugFmt := color.New(color.FgGreen).Add(color.Bold) // Not used in prod
 	fmt.Println("Running CowChina v0.1.0 ")
 	// Get player names
-	var p1Name, p2Name, p3Name, p4Name string
-	inputFmt.Print("Enter name of the first player: ")
-	fmt.Scanln(&p1Name)
-	inputFmt.Print("Enter name of the second player: ")
-	fmt.Scanln(&p2Name)
-	inputFmt.Print("Enter name of the third player: ")
-	fmt.Scanln(&p3Name)
-	inputFmt.Print("Enter name of the fourth player: ")
-	fmt.Scanln(&p4Name)
-	player1 = Player{1, p1Name, make(map[int]CSuit), TeamA}
-	player2 = Player{2, p2Name, make(map[int]CSuit), TeamB}
-	player3 = Player{3, p3Name, make(map[int]CSuit), TeamA}
-	player4 = Player{4, p4Name, make(map[int]CSuit), TeamB}
-	infoFmt.Println(player1.name, "and", player3.name, "is Team A.")
-	infoFmt.Println(player2.name, "and", player4.name, "is Team B.")
+	players = make(map[int]Player)
+	for i := 1; i < 5; i++ {
+		var name string
+		inputFmt.Print("Enter name of the " + playerNumberToSimpleText(i) + " player: ")
+		fmt.Scanln(&name)
+		// TODO assign the team of each player
+		players[i] = Player{i, name, make(map[int]CSuit), TeamA}
+	}
+	// TODO list each team here
 	// Get the bid
 	currentBid := Bid{}
-	for currentBid.wins == 0 {
+	for currentBid == (Bid{}) {
 		var highestBid, biddingTeam, biddingSuit string
 		var bidTeam Team
 		// Get input
@@ -190,7 +183,7 @@ func main() {
 
 		// Convert the bid input to string
 		bidInt, err := strconv.Atoi(highestBid)
-		if err == nil {
+		if err == nil && bidInt > 5 && bidInt < 11 {
 			// Get the input of the team
 			switch biddingTeam {
 			case "a":
@@ -209,7 +202,7 @@ func main() {
 				}
 			}
 		}
-		if currentBid.wins == 0 {
+		if currentBid == (Bid{}) {
 			// Uh, oh! There was an error in the previous input and the Bid was not set
 			errorFmt.Print("Invalid bid!")
 			fmt.Println()
@@ -220,28 +213,13 @@ func main() {
 	moves = make(map[int]Move)
 	playerTurn := 1
 	moveCount := 1
+	var deckFirstCard Card
 	deckCount := 1
 	for i := 1; i < 99; i++ {
-		var currentPlayer *Player
-		switch playerTurn {
-		case 1:
-			currentPlayer = &player1
-		case 2:
-			currentPlayer = &player2
-		case 3:
-			currentPlayer = &player3
-		case 4:
-			currentPlayer = &player4
-		default:
-			errorFmt.Print("Error in finding the player for playerTurn! playerTurn invalid!")
-			fmt.Println()
-		}
-
-		infoFmt.Print("It's " + currentPlayer.name + "'s turn!")
-		fmt.Println()
+		infoFmt.Print("It's " + players[playerTurn].name + "'s turn!")
+		debugFmt.Println(players[playerTurn].cSBList)
 		inputFmt.Print("Enter move's card (e.g. c9): ")
 		var moveIn string
-		newFace := false
 
 		pass := false
 		fmt.Scanln(&moveIn)
@@ -293,37 +271,41 @@ func main() {
 		}
 
 		if pass {
-			infoFmt.Println(currentPlayer.name + " Pass!")
+			infoFmt.Println(players[playerTurn].name + " Pass!")
 		} else if !failed {
-			if playerTurn < 4 {
-				playerTurn++
-			} else {
-				playerTurn = 1
-			}
+
 			cardPlaced := Card{cardSuit, cardSymbol}
-			thisMove := Move{cardPlaced, currentPlayer.id}
+			thisMove := Move{cardPlaced, players[playerTurn].id}
 
 			// Check with previous moves if this move changes symbol
-			if !newFace {
-				if currentBid.cardSuit == cardPlaced.cardSuit {
+
+			if deckFirstCard == (Card{}) {
+				if deckFirstCard.cardSuit == cardPlaced.cardSuit && cardPlaced.cardSuit != JOKER {
 					// This is compatible
 				} else {
-					// The player placed a card not the same symbol as the bid. We will add it to blacklist.
-					blacklist := currentPlayer.cSBList
-					blacklist[len(blacklist)] = cardSuit
-					currentPlayer.cSBList = blacklist
+					// The player placed a card not the same symbol as the first. We will add it to blacklist.
+					players[playerTurn].cSBList[len(players[playerTurn].cSBList)] = deckFirstCard.cardSuit
+					anticheatFmt.Print(players[playerTurn].name + " placed " + cardSuitToText(cardPlaced.cardSuit) + " and we do not expect the player to have " + cardSuitToText(deckFirstCard.cardSuit) + ".")
+					fmt.Println()
 				}
+			} else if cardPlaced.cardSuit != JOKER {
+				deckFirstCard = cardPlaced
 			}
 			infoFmt.Println(cardToText(cardPlaced))
 			// Continue for the next mov
 			if deckCount < 4 {
 				deckCount++
-				newFace = false
 			} else {
 				deckCount = 1
-				newFace = true
+				deckFirstCard = Card{}
 				infoFmt.Print("===== New deck! =====")
 				fmt.Println()
+			}
+			// Prepare for last game, do not write anything after this.
+			if playerTurn < 4 {
+				playerTurn++
+			} else {
+				playerTurn = 1
 			}
 			moves[moveCount] = thisMove
 			moveCount++
@@ -335,48 +317,60 @@ func main() {
 	fmt.Println("End of game! (or max cycles reached)")
 }
 
+func cardSuitToText(suit CSuit) string {
+	switch suit {
+	case CLUBS:
+		return "Clubs"
+	case DIAMONDS:
+		return "Diamonds"
+	case HEARTS:
+		return "Hearts"
+	case SPADES:
+		return "Spades"
+	case JOKER:
+		return "Joker"
+	}
+	return "Unknown"
+}
+
+func cardSymbolToText(symbol CSymbol) string {
+	switch symbol {
+	case ACE:
+		return "Ace"
+	case JACK:
+		return "Jack"
+	case QUEEN:
+		return "Queen"
+	case KING:
+		return "King"
+	case N6:
+		return "6"
+	case N7:
+		return "7"
+	case N8:
+		return "8"
+	case N9:
+		return "9"
+	case N10:
+		return "10"
+	case BLACK:
+		return "(black)"
+	case RED:
+		return "(red)"
+	}
+	return "Unknown"
+}
+
 func cardToText(card Card) string {
-	var symbol, suit string
 	if card.cardSuit == JOKER {
-		switch card.cardSuit {
+		switch card.cardSymbol {
 		case BLACK:
 			return "Small (black) Joker"
 		case RED:
 			return "Big (red) Joker"
 		}
 	}
-	switch card.cardSuit {
-	case CLUBS:
-		symbol = "Clubs"
-	case DIAMONDS:
-		symbol = "Diamonds"
-	case HEARTS:
-		symbol = "Hearts"
-	case SPADES:
-		symbol = "Spades"
-	}
-
-	switch card.cardSymbol {
-	case ACE:
-		suit = "Ace"
-	case JACK:
-		suit = "Jack"
-	case QUEEN:
-		suit = "Queen"
-	case KING:
-		suit = "King"
-	case N6:
-		suit = "6"
-	case N7:
-		suit = "7"
-	case N8:
-		suit = "8"
-	case N9:
-		suit = "9"
-	case N10:
-		suit = "10"
-	}
-	return suit + " of " + symbol
+	return cardSuitToText(card.cardSuit) + " of " + cardSymbolToText(card.cardSymbol)
 }
 
 func getSuitFromText(symbol string) (CSuit, error) {
@@ -391,6 +385,21 @@ func getSuitFromText(symbol string) (CSuit, error) {
 		return SPADES, nil
 	default:
 		return NULL, errors.New("Unknown Suit")
+	}
+}
+
+func playerNumberToSimpleText(number int) string {
+	switch number {
+	case 1:
+		return "first"
+	case 2:
+		return "second"
+	case 3:
+		return "third"
+	case 4:
+		return "fourth"
+	default:
+		return "unknown"
 	}
 }
 
