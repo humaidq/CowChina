@@ -78,8 +78,6 @@ type Move struct {
 	player int
 }
 
-var moves map[int]Move
-
 // Card is a struct that contains all the attributes of a playing card.
 type Card struct {
 	cardSuit   CSuit
@@ -143,6 +141,7 @@ const (
 )
 
 var players map[int]Player
+var moves map[int]Move
 
 // Bid is a struct which can save the bid information of a game.
 type Bid struct {
@@ -156,7 +155,7 @@ func main() {
 	anticheatFmt := color.New(color.BgHiMagenta)
 	inputFmt := color.New(color.FgCyan)
 	infoFmt := color.New(color.FgMagenta)
-	debugFmt := color.New(color.FgGreen).Add(color.Bold) // Not used in prod
+	//debugFmt := color.New(color.FgGreen).Add(color.Bold) // Not used in prod
 	fmt.Println("Running CowChina v0.1.0 ")
 	// Get player names
 	players = make(map[int]Player)
@@ -167,7 +166,6 @@ func main() {
 		// TODO assign the team of each player
 		players[i] = Player{i, name, make(map[int]CSuit), TeamA}
 	}
-	// TODO list each team here
 	// Get the bid
 	currentBid := Bid{}
 	for currentBid == (Bid{}) {
@@ -214,10 +212,10 @@ func main() {
 	playerTurn := 1
 	moveCount := 1
 	var deckFirstCard Card
+	deckMoves := make(map[int]Move)
 	deckCount := 1
 	for i := 1; i < 99; i++ {
 		infoFmt.Print("It's " + players[playerTurn].name + "'s turn!")
-		debugFmt.Println(players[playerTurn].cSBList)
 		inputFmt.Print("Enter move's card (e.g. c9): ")
 		var moveIn string
 
@@ -227,26 +225,24 @@ func main() {
 		var cardSymbol CSymbol
 		var failed bool
 		if moveIn == "" {
-			if len(moves) == 0 {
-				pass = true
-				if playerTurn < 4 {
-					playerTurn++
-				} else {
-					playerTurn = 1
-				}
+			pass = true
+			if playerTurn < 4 {
+				playerTurn++
 			} else {
-				errorFmt.Print("Cannot pass mid-game!")
-				fmt.Println()
+				playerTurn = 1
 			}
 		} else if len(moveIn) < 2 {
 			errorFmt.Print("Invalid input, enter again!")
 			fmt.Println()
+			failed = true
 		} else if strings.HasPrefix(moveIn, "c") || strings.HasPrefix(moveIn, "d") || strings.HasPrefix(moveIn, "h") || strings.HasPrefix(moveIn, "s") {
+			// TODO: Make the suit and symbol interchangeable
 			cardSuitIn := fmt.Sprintf("%c", moveIn[0])
 			cardSuitGet, err := getSuitFromText(cardSuitIn)
 			if err != nil {
 				errorFmt.Print(err)
 				fmt.Println()
+				failed = true
 			} else {
 				cardSuit = cardSuitGet
 			}
@@ -259,6 +255,7 @@ func main() {
 			if err != nil {
 				errorFmt.Print(err)
 				fmt.Println()
+				failed = true
 			} else {
 				cardSymbol = cardSymbolGet
 			}
@@ -278,7 +275,6 @@ func main() {
 			thisMove := Move{cardPlaced, players[playerTurn].id}
 
 			// Check with previous moves if this move changes symbol
-
 			if deckFirstCard == (Card{}) {
 				if deckFirstCard.cardSuit == cardPlaced.cardSuit && cardPlaced.cardSuit != JOKER {
 					// This is compatible
@@ -292,22 +288,23 @@ func main() {
 				deckFirstCard = cardPlaced
 			}
 			infoFmt.Println(cardToText(cardPlaced))
-			// Continue for the next mov
+			// Continue for the next move
 			if deckCount < 4 {
 				deckCount++
 			} else {
 				deckCount = 1
 				deckFirstCard = Card{}
-				infoFmt.Print("===== New deck! =====")
+				infoFmt.Print("========= New deck! ========")
 				fmt.Println()
 			}
-			// Prepare for last game, do not write anything after this.
+			// Prepare for next game, do not do anything after this comment.
 			if playerTurn < 4 {
 				playerTurn++
 			} else {
 				playerTurn = 1
 			}
 			moves[moveCount] = thisMove
+			deckMoves[len(deckMoves)] = thisMove
 			moveCount++
 		} else {
 			errorFmt.Print("Invalid input, enter again!")
