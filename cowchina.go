@@ -58,6 +58,7 @@ Cheat Detection:
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -148,6 +149,8 @@ const (
 
 var players map[int]Player
 var moves map[int]Move
+var currentBid Bid
+var usedCards map[int]Card
 
 // Bid is a struct which can save the bid information of a game.
 type Bid struct {
@@ -173,7 +176,7 @@ func main() {
 		players[i] = Player{i, name, make(map[int]CSuit), TeamA}
 	}
 	// Get the bid
-	currentBid := Bid{}
+	currentBid = Bid{}
 	for currentBid == (Bid{}) {
 		var highestBid, biddingTeam, biddingSuit string
 		var bidTeam Team
@@ -187,7 +190,7 @@ func main() {
 
 		// Convert the bid input to string
 		bidInt, err := strconv.Atoi(highestBid)
-		if err == nil && bidInt > 5 && bidInt < 11 {
+		if err == nil && bidInt > 2 && bidInt < 11 {
 			// Get the input of the team
 			switch biddingTeam {
 			case "a":
@@ -214,30 +217,26 @@ func main() {
 	}
 	// We will initialize the moves map and declare these variables to be used
 	moves = make(map[int]Move)
+	usedCards := make(map[int]Card)
 	playerTurn := 1
 	moveCount := 1
 	var deckFirstCard Card
 	deckMoves := make(map[int]Move)
 	deckCount := 1
 	for i := 1; i < 99; i++ {
-		infoFmt.Println("It's " + players[playerTurn].name + "'s turn!")
-		inputFmt.Print("Enter move's card (e.g. c9): ")
+		if deckCount == 1 {
+			infoFmt.Println("========= New deck! ========")
+		}
+		inputFmt.Print("Enter " + players[playerTurn].name + " move's card: ")
 		var moveIn string
-
-		pass := false
 		fmt.Scanln(&moveIn)
 		var cardSuit CSuit
 		var cardSymbol CSymbol
 		var failed bool
+
 		if moveIn == "" {
-			pass = true
-			if playerTurn < 4 {
-				playerTurn++
-			} else {
-				playerTurn = 1
-			}
+			failed = true
 		} else if (strings.HasPrefix(moveIn, "c") || strings.HasPrefix(moveIn, "d") || strings.HasPrefix(moveIn, "h") || strings.HasPrefix(moveIn, "s")) && len(moveIn) > 1 && len(moveIn) < 4 {
-			// TODO: Make the suit and symbol interchangeable
 			cardSuitIn := fmt.Sprintf("%c", moveIn[0])
 			cardSuitGet, err := getSuitFromText(cardSuitIn)
 			if err != nil {
@@ -252,6 +251,7 @@ func main() {
 			if len(moveIn) == 3 {
 				cardSymbolIn += fmt.Sprintf("%c", moveIn[2])
 			}
+
 			cardSymbolGet, err := getSymbolFromText(cardSymbolIn)
 			if err != nil {
 				errorFmt.Print(err)
@@ -271,78 +271,141 @@ func main() {
 			fmt.Println()
 			failed = true
 		}
-
-		if pass {
-			infoFmt.Println(players[playerTurn].name + " Pass!")
-		} else if !failed {
-
-			cardPlaced := Card{cardSuit, cardSymbol}
-
-			blackMove := false
-			for _, blSuit := range players[playerTurn].cSBList {
-				if cardPlaced.cardSuit == blSuit {
-					blackMove = true
-					anticheatFmt.Print(players[playerTurn].name + " cheated, " + players[playerTurn].name + " should have placed " + cardSuitToText(cardPlaced.cardSuit) + " in a previous deck.")
+		if !failed {
+			for _, usedCard := range usedCards {
+				cardPlaced := Card{cardSuit, cardSymbol}
+				if usedCard == cardPlaced {
+					errorFmt.Print("Card used previously!")
 					fmt.Println()
-					break
+					failed = true
 				}
 			}
-			thisMove := Move{cardPlaced, players[playerTurn].id, blackMove}
-			// Check with previous moves if this move changes symbol
-			if deckFirstCard != (Card{}) {
-				if deckFirstCard.cardSuit == cardPlaced.cardSuit || cardPlaced.cardSuit == JOKER {
-					// This is compatible
-				} else {
-					// The player placed a card not the same symbol as the first. We will add it to blacklist.
-					players[playerTurn].cSBList[len(players[playerTurn].cSBList)] = deckFirstCard.cardSuit
-					//anticheatFmt.Print(players[playerTurn].name + " placed " + cardSuitToText(cardPlaced.cardSuit) + " and we do not expect the player to have " + cardSuitToText(deckFirstCard.cardSuit) + ".")
-					//fmt.Println()
+			if !failed {
+				cardPlaced := Card{cardSuit, cardSymbol}
+				blackMove := false
+				for _, blSuit := range players[playerTurn].cSBList {
+					if cardPlaced.cardSuit == blSuit {
+						blackMove = true
+						anticheatFmt.Print(players[playerTurn].name + " cheated, " + players[playerTurn].name + " should have placed " + cardSuitToText(cardPlaced.cardSuit) + " in a previous deck.")
+						fmt.Println()
+						break
+					}
 				}
-			} else if cardPlaced.cardSuit != JOKER {
-				deckFirstCard = cardPlaced
-			}
-			infoFmt.Println(cardToText(cardPlaced))
-			// Continue for the next move
-			moves[moveCount] = thisMove
-			deckMoves[len(deckMoves)] = thisMove
-			moveCount++
-			if deckCount < 4 {
-				deckCount++
-				if playerTurn < 4 {
-					playerTurn++
+				usedCards[len(usedCards)] = cardPlaced
+				thisMove := Move{cardPlaced, players[playerTurn].id, blackMove}
+				// Check with previous moves if this move changes symbol
+				if deckFirstCard != (Card{}) {
+					if deckFirstCard.cardSuit == cardPlaced.cardSuit || cardPlaced.cardSuit == JOKER {
+						// This is compatible
+					} else {
+						// The player placed a card not the same symbol as the first. We will add it to blacklist.
+						players[playerTurn].cSBList[len(players[playerTurn].cSBList)] = deckFirstCard.cardSuit
+						//anticheatFmt.Print(players[playerTurn].name + " placed " + cardSuitToText(cardPlaced.cardSuit) + " and we do not expect the player to have " + cardSuitToText(deckFirstCard.cardSuit) + ".")
+						//fmt.Println()
+					}
+				} else if cardPlaced.cardSuit != JOKER {
+					deckFirstCard = cardPlaced
+				}
+				//infoFmt.Println(cardToText(cardPlaced))
+				// Continue for the next move
+				moves[moveCount] = thisMove
+				deckMoves[len(deckMoves)] = thisMove
+				moveCount++
+				if deckCount < 4 {
+					deckCount++
+					if playerTurn < 4 {
+						playerTurn++
+					} else {
+						playerTurn = 1
+					}
 				} else {
-					playerTurn = 1
+					// Get the winner
+					winnerMove := getWinnerFromDeck(deckMoves, deckFirstCard.cardSuit)
+					infoFmt.Println(players[winnerMove.player].name + " eats this deck!")
+					playerTurn = winnerMove.player
+					deckMoves = make(map[int]Move)
+					deckCount = 1
+					deckFirstCard = Card{}
 				}
 			} else {
-				// Get the winner
-				winnerMove := getWinnerFromDeck(deckMoves)
-				infoFmt.Println(players[winnerMove.player].name + " eats this deck!")
-				playerTurn = winnerMove.player
-				deckMoves = make(map[int]Move)
-				deckCount = 1
-				deckFirstCard = Card{}
-				infoFmt.Println("========= New deck! ========")
+				errorFmt.Print("Invalid input, enter again!")
+				fmt.Println()
 			}
-		} else {
-			errorFmt.Print("Invalid input, enter again!")
-			fmt.Println()
 		}
 	}
 	fmt.Println("End of game! (or max cycles reached)")
 }
 
-func getWinnerFromDeck(deck map[int]Move) Move {
+func getWinnerFromDeck(deck map[int]Move, firstSuit CSuit) Move {
 	// Check if there are jokers in the deck
+	jokerMove := Move{}
 	for _, move := range deck {
-		if move.card.cardSuit == JOKER {
-			if move.card.cardSymbol == RED {
-				return move
-			} else if move.card.cardSymbol == BLACK {
-				return move
+		if move.card.cardSuit == JOKER && move.card.cardSymbol == BLACK {
+			jokerMove = move
+		}
+	}
+	for _, move := range deck {
+		if move.card.cardSuit == JOKER && move.card.cardSymbol == RED {
+			jokerMove = move
+		}
+	}
+	if jokerMove != (Move{}) {
+		return jokerMove
+	}
+	// If there are no jokers, we will now see which card is the highest ranking
+	suitWinOrder := make(map[int]CSuit)
+	suitWinOrder[0] = currentBid.cardSuit
+	suitWinOrder[1] = firstSuit
+	// We will add the rest of the suits in order, this should only add two entries to the map with total of four
+	if currentBid.cardSuit != CLUBS {
+		suitWinOrder[len(suitWinOrder)] = CLUBS
+	}
+	if currentBid.cardSuit != DIAMONDS {
+		suitWinOrder[len(suitWinOrder)] = DIAMONDS
+	}
+	if currentBid.cardSuit != HEARTS {
+		suitWinOrder[len(suitWinOrder)] = HEARTS
+	}
+	if currentBid.cardSuit != SPADES {
+		suitWinOrder[len(suitWinOrder)] = SPADES
+	}
+	suitKeys := []int{}
+	for i := range suitWinOrder {
+		suitKeys = append(suitKeys, i)
+	}
+	sort.Ints(suitKeys)
+
+	// List the priority of card symbols
+	symbolWinOrder := make(map[int]CSymbol)
+	symbolWinOrder[len(symbolWinOrder)] = ACE
+	symbolWinOrder[len(symbolWinOrder)] = KING
+	symbolWinOrder[len(symbolWinOrder)] = QUEEN
+	symbolWinOrder[len(symbolWinOrder)] = 10
+	symbolWinOrder[len(symbolWinOrder)] = 9
+	symbolWinOrder[len(symbolWinOrder)] = 8
+	symbolWinOrder[len(symbolWinOrder)] = 7
+	symbolWinOrder[len(symbolWinOrder)] = 6
+	symbolKeys := []int{}
+	for i := range symbolWinOrder {
+		symbolKeys = append(symbolKeys, i)
+	}
+	sort.Ints(symbolKeys)
+	// Now we will search for the highest card
+	for _, suiti := range suitKeys {
+		suit := suitWinOrder[suiti]
+		for _, symboli := range symbolKeys {
+			symbol := symbolWinOrder[symboli]
+			//fmt.Println(cardSuitToText(suit) + " " + cardSymbolToText(symbol))
+			for _, move := range deck {
+				if move.card.cardSuit == suit && move.card.cardSymbol == symbol {
+					// This move should be the winner
+					return move
+				}
 			}
 		}
 	}
-	return deck[0]
+	// Very unlikely
+	return Move{}
 }
 
 func cardSuitToText(suit CSuit) string {
