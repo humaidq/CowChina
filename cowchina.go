@@ -74,8 +74,9 @@ type Player struct {
 
 // Move is a struct that contains a Card and the player (which placed it).
 type Move struct {
-	card   Card
-	player int
+	card      Card
+	player    int
+	blackMove bool
 }
 
 // Card is a struct that contains all the attributes of a playing card.
@@ -140,6 +141,11 @@ const (
 	TeamB = iota
 )
 
+const (
+	brand = "CowChina"
+	ver   = "0.1.0"
+)
+
 var players map[int]Player
 var moves map[int]Move
 
@@ -156,7 +162,7 @@ func main() {
 	inputFmt := color.New(color.FgCyan)
 	infoFmt := color.New(color.FgMagenta)
 	//debugFmt := color.New(color.FgGreen).Add(color.Bold) // Not used in prod
-	fmt.Println("Running CowChina v0.1.0 ")
+	fmt.Println("Running " + brand + " v" + ver)
 	// Get player names
 	players = make(map[int]Player)
 	for i := 1; i < 5; i++ {
@@ -206,7 +212,6 @@ func main() {
 			fmt.Println()
 		}
 	}
-	fmt.Println(currentBid)
 	// We will initialize the moves map and declare these variables to be used
 	moves = make(map[int]Move)
 	playerTurn := 1
@@ -215,7 +220,7 @@ func main() {
 	deckMoves := make(map[int]Move)
 	deckCount := 1
 	for i := 1; i < 99; i++ {
-		infoFmt.Print("It's " + players[playerTurn].name + "'s turn!")
+		infoFmt.Println("It's " + players[playerTurn].name + "'s turn!")
 		inputFmt.Print("Enter move's card (e.g. c9): ")
 		var moveIn string
 
@@ -231,11 +236,7 @@ func main() {
 			} else {
 				playerTurn = 1
 			}
-		} else if len(moveIn) < 2 {
-			errorFmt.Print("Invalid input, enter again!")
-			fmt.Println()
-			failed = true
-		} else if strings.HasPrefix(moveIn, "c") || strings.HasPrefix(moveIn, "d") || strings.HasPrefix(moveIn, "h") || strings.HasPrefix(moveIn, "s") {
+		} else if (strings.HasPrefix(moveIn, "c") || strings.HasPrefix(moveIn, "d") || strings.HasPrefix(moveIn, "h") || strings.HasPrefix(moveIn, "s")) && len(moveIn) > 1 && len(moveIn) < 4 {
 			// TODO: Make the suit and symbol interchangeable
 			cardSuitIn := fmt.Sprintf("%c", moveIn[0])
 			cardSuitGet, err := getSuitFromText(cardSuitIn)
@@ -265,6 +266,10 @@ func main() {
 		} else if moveIn == "x" {
 			cardSuit = JOKER
 			cardSymbol = BLACK
+		} else {
+			errorFmt.Print("Invalid input, enter again!")
+			fmt.Println()
+			failed = true
 		}
 
 		if pass {
@@ -272,46 +277,72 @@ func main() {
 		} else if !failed {
 
 			cardPlaced := Card{cardSuit, cardSymbol}
-			thisMove := Move{cardPlaced, players[playerTurn].id}
 
+			blackMove := false
+			for _, blSuit := range players[playerTurn].cSBList {
+				if cardPlaced.cardSuit == blSuit {
+					blackMove = true
+					anticheatFmt.Print(players[playerTurn].name + " cheated, " + players[playerTurn].name + " should have placed " + cardSuitToText(cardPlaced.cardSuit) + " in a previous deck.")
+					fmt.Println()
+					break
+				}
+			}
+			thisMove := Move{cardPlaced, players[playerTurn].id, blackMove}
 			// Check with previous moves if this move changes symbol
-			if deckFirstCard == (Card{}) {
-				if deckFirstCard.cardSuit == cardPlaced.cardSuit && cardPlaced.cardSuit != JOKER {
+			if deckFirstCard != (Card{}) {
+				if deckFirstCard.cardSuit == cardPlaced.cardSuit || cardPlaced.cardSuit == JOKER {
 					// This is compatible
 				} else {
 					// The player placed a card not the same symbol as the first. We will add it to blacklist.
 					players[playerTurn].cSBList[len(players[playerTurn].cSBList)] = deckFirstCard.cardSuit
-					anticheatFmt.Print(players[playerTurn].name + " placed " + cardSuitToText(cardPlaced.cardSuit) + " and we do not expect the player to have " + cardSuitToText(deckFirstCard.cardSuit) + ".")
-					fmt.Println()
+					//anticheatFmt.Print(players[playerTurn].name + " placed " + cardSuitToText(cardPlaced.cardSuit) + " and we do not expect the player to have " + cardSuitToText(deckFirstCard.cardSuit) + ".")
+					//fmt.Println()
 				}
 			} else if cardPlaced.cardSuit != JOKER {
 				deckFirstCard = cardPlaced
 			}
 			infoFmt.Println(cardToText(cardPlaced))
 			// Continue for the next move
-			if deckCount < 4 {
-				deckCount++
-			} else {
-				deckCount = 1
-				deckFirstCard = Card{}
-				infoFmt.Print("========= New deck! ========")
-				fmt.Println()
-			}
-			// Prepare for next game, do not do anything after this comment.
-			if playerTurn < 4 {
-				playerTurn++
-			} else {
-				playerTurn = 1
-			}
 			moves[moveCount] = thisMove
 			deckMoves[len(deckMoves)] = thisMove
 			moveCount++
+			if deckCount < 4 {
+				deckCount++
+				if playerTurn < 4 {
+					playerTurn++
+				} else {
+					playerTurn = 1
+				}
+			} else {
+				// Get the winner
+				winnerMove := getWinnerFromDeck(deckMoves)
+				infoFmt.Println(players[winnerMove.player].name + " eats this deck!")
+				playerTurn = winnerMove.player
+				deckMoves = make(map[int]Move)
+				deckCount = 1
+				deckFirstCard = Card{}
+				infoFmt.Println("========= New deck! ========")
+			}
 		} else {
 			errorFmt.Print("Invalid input, enter again!")
 			fmt.Println()
 		}
 	}
 	fmt.Println("End of game! (or max cycles reached)")
+}
+
+func getWinnerFromDeck(deck map[int]Move) Move {
+	// Check if there are jokers in the deck
+	for _, move := range deck {
+		if move.card.cardSuit == JOKER {
+			if move.card.cardSymbol == RED {
+				return move
+			} else if move.card.cardSymbol == BLACK {
+				return move
+			}
+		}
+	}
+	return deck[0]
 }
 
 func cardSuitToText(suit CSuit) string {
