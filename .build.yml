@@ -1,0 +1,19 @@
+image: archlinux
+packages:
+  - go
+sources:
+  - https://git.sr.ht/~humaid/cowchina
+tasks:
+  - setup: |
+      cd cowchina
+      go get ./...
+  - format: |
+      cd cowchina
+      go fmt $(go list ./... | grep -v /vendor/)
+      go vet $(go list ./... | grep -v /vendor/)
+  - test: |
+      cd cowchina
+      go test -cover -race $(go list ./... | grep -v /vendor/)
+  - build: |
+      cd cowchina
+      go build
