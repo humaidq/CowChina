@@ -1,5 +1,5 @@
 # CowChina
-
+[Visit the project page on humaidq.ae](https://humaidq.ae/projects/cowchina/)
 ## 1. Description
 CowChina is a logger for a variant of the Spades playing card game. It logs the moves, invalid cards (cheating) and winners.  
 
